@@ -15,28 +15,6 @@ from sklearn.metrics import (
     precision_recall_fscore_support,
 )
 
-# def modal_sum(w, a_n, z_n, w_n, sigma=0.1, multiclass = False):
-#     """Returns transfer function and labels for a modal sum system.
-#     Additive Gaussian noise added independently to real and imaginary parts."""
-#     tf = np.zeros_like(w, dtype=np.complex128)
-#     for i in range(len(a_n)):
-#         tf += a_n[i] *1j * w / (w_n[i]**2 - w**2 + 1j * 2 * z_n[i] * w * w_n[i])
-#     noise = np.random.normal(0, sigma, len(w)) + 1j * np.random.normal(0, sigma, len(w))
-#     tf += noise
-
-#     y = np.zeros(len(w))
-#     for i, w_n_value in enumerate(w_n):
-#         closest_index = np.argmin(np.abs(w - w_n_value))
-#         dw = w_n_value * z_n[i] # Half power bandwidth
-#         indices_in_range = np.where((w > w_n_value - dw) & (w < w_n_value + dw))
-#         combined_indices = np.concatenate((indices_in_range[0], [closest_index]))
-
-#         if multiclass:
-#             y[combined_indices] = np.where(y[combined_indices] == 0, 1, 2)
-#         else:
-#             y[combined_indices] = 1
-#     return tf, y
-
 
 @jit(nopython=True)
 def modal_sum_fast(
@@ -291,52 +269,90 @@ def generate_dat_extended(
     return np.array(X), np.array(Y), ws, zs, a_s
 
 
-def plot_tf(tf, y, todb=True, ws=None, figsize=(7, 4), x_lower=0.0):
+def plot_tf(
+    tf, y, todb=True, ws=None, figsize=(8, 6), w=None, model=None, X=None, name=None
+):
     """Plot transfer function and show training labels and mode frequencies."""
     fig, ax = plt.subplots(figsize=figsize)
-    w = np.linspace(0, 1, len(y))
-    if todb:
-        ax.plot(w, to_db(tf), label="Transfer Function", c="blue", alpha=0.7)
-        ax.scatter(
-            w[y == 1],
-            to_db(tf)[y == 1],
-            c="red",
-            marker="o",
-            label=r"Training Labels $(y_m = 1)$",
-        )
-        ax.scatter(
-            w[y == 2],
-            to_db(tf)[y == 2],
-            c="orange",
-            marker="o",
-            label=r"Training Labels $(y_m = 2)$",
-        )
+    if w is None:
+        w = np.linspace(0, 1, len(y))
     else:
-        # Plot maginitude of transfer function
-        tf_vals = np.linalg.norm(tf, axis=-1)
-        # tf_vals = normalise(tf)
-        ax.plot(w, tf_vals, label="Transfer Function", c="blue")
-        ax.scatter(w[y == 1], tf_vals[y == 1], c="red", marker="o")
-        ax.scatter(w[y == 2], tf_vals[y == 2], c="orange", marker="o")
+        w = w
+
+    mask = np.zeros_like(w)
+    mask[y == 1] = 1
+    mask[y == 2] = 1
+    if todb:
+        tf_db = to_db(tf)
+        # ax.scatter(w[y == 1], modal.to_db(tf)[y == 1], c='red', marker='o', label=r'Training Labels $(t_m = 1)$')
+        ax.plot(w, tf_db, label="Transfer Function", c="blue", alpha=0.7)
+
+    ax.imshow(
+        mask.reshape(1, -1),
+        aspect="auto",
+        extent=[0, 1, ax.get_ylim()[0], ax.get_ylim()[1]],
+        cmap="Greys",
+        alpha=0.1,
+    )
 
     if ws is not None:
-        count = 0
         for w_n in ws:
-            count += 1
-            if count == 1:
-                ax.axvline(
-                    w_n, c="black", linestyle="--", label="Mode Frequency", alpha=0.5
-                )
-            else:
-                ax.axvline(w_n, c="black", linestyle="--", alpha=0.5)
+            ax.axvline(w_n, c="black", linestyle="--", alpha=0.5)
 
-    ax.set_xlabel("Normalised Frequency")
+    if w is not None:
+        ax.set_xlabel("Frequency (rad/s)")
+    else:
+        ax.set_xlabel("Normalised Frequency")
     if todb:
         ax.set_ylabel("Magnitude (dB)")
     else:
         ax.set_ylabel("Magnitude")
-    ax.set_xlim(x_lower, 1)
-    ax.legend()
+
+    if model is not None and X is not None:
+        tf_tensor = torch.from_numpy(X).to(torch.float32)
+        model.eval()
+        output = model(tf_tensor)
+        test_op = np.array(output.detach().numpy())
+        predicted = np.argmax(test_op, axis=-1).reshape(-1)
+
+        mask = np.zeros_like(w)
+        mask[predicted.reshape(-1) == 1] = 1
+        mask[predicted.reshape(-1) == 2] = 1
+
+        segment_start = None
+        for i in range(len(w)):
+            if predicted[i] == 1:
+                if segment_start is None:
+                    segment_start = i
+            elif segment_start is not None:
+                if i == segment_start + 1:
+                    ax.scatter(
+                        w[segment_start], tf_db[segment_start], c="red", alpha=0.7, s=50
+                    )
+                ax.plot(
+                    w[segment_start:i],
+                    tf_db[segment_start:i],
+                    c="red",
+                    alpha=0.7,
+                    linewidth=5,
+                    label="Predicted=1",
+                )
+                segment_start = None
+        if segment_start is not None:
+            ax.plot(
+                w[segment_start:i],
+                tf_db[segment_start:i],
+                c="red",
+                alpha=0.7,
+                linewidth=5,
+            )
+    # legend_elements = []
+    # legend_elements = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='Training Labels $(t_m = 1)$')]
+    ax.set_xlim(
+        -50,
+    )
+    if name is not None:
+        plt.savefig(f"./Figs/{name}.pdf")
     plt.show()
     return fig, ax
 

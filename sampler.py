@@ -459,30 +459,30 @@ class Sampler:
             plt.savefig(f"./Figs/{name}.pdf")
         plt.show()
 
-        if self.run_flag:
-            fig, axs = plt.subplots(num_modes, 3, figsize=figsize)
-            for i in range(num_modes):
-                axs[i, 0].hist(
-                    self.samples[:, :, i], bins=100, color="black", alpha=0.3
-                )
-                axs[i, 0].set_title(f"Mode {i+1} - $\omega$")
-                axs[i, 1].hist(
-                    self.samples[:, :, i + num_modes],
-                    bins=100,
-                    color="black",
-                    alpha=0.3,
-                )
-                axs[i, 1].set_title(f"Mode {i+1} - $a$")
-                axs[i, 2].hist(
-                    self.samples[:, :, i + 2 * num_modes],
-                    bins=100,
-                    color="black",
-                    alpha=0.3,
-                )
-                axs[i, 2].set_title(f"Mode {i+1} - $\zeta$")
-            plt.show()
-        else:
-            raise ValueError("Sampler has not been run yet.")
+        # if self.run_flag:
+        #     fig, axs = plt.subplots(num_modes, 3, figsize=figsize)
+        #     for i in range(num_modes):
+        #         axs[i, 0].hist(
+        #             self.samples[:, :, i], bins=100, color="black", alpha=0.3
+        #         )
+        #         axs[i, 0].set_title(f"Mode {i+1} - $\omega$")
+        #         axs[i, 1].hist(
+        #             self.samples[:, :, i + num_modes],
+        #             bins=100,
+        #             color="black",
+        #             alpha=0.3,
+        #         )
+        #         axs[i, 1].set_title(f"Mode {i+1} - $a$")
+        #         axs[i, 2].hist(
+        #             self.samples[:, :, i + 2 * num_modes],
+        #             bins=100,
+        #             color="black",
+        #             alpha=0.3,
+        #         )
+        #         axs[i, 2].set_title(f"Mode {i+1} - $\zeta$")
+        #     plt.show()
+        # else:
+        #     raise ValueError("Sampler has not been run yet.")
 
     def plot_state_evolution(
         self, mode_num=None, figsize=None, ypos=-0.1, name=None, mode_truths=None
@@ -557,6 +557,7 @@ class Sampler:
     def burn_in(self, nburn: int) -> None:
         if self.run_flag:
             if self.sampler_type == "emcee":
+                self.samples = self.sampler.get_chain(discard=nburn, flat=False)
                 self.flat_samples = self.sampler.get_chain(discard=nburn, flat=True)
                 self.log_probs = self.sampler.get_log_prob(discard=nburn, flat=True)
                 self.burned_flag = True
@@ -1175,8 +1176,8 @@ class Sampler:
             mins = np.append(np.array([min_ws, min_as, min_zs]).flatten(), sigma_min)
             maxs = np.append(np.array([max_ws, max_as, max_zs]).flatten(), sigma_max)
 
-        print(mins)
-        print(maxs)
+        # print(mins)
+        # print(maxs)
 
         return priors, mins, maxs
 
